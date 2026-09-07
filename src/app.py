@@ -54,54 +54,69 @@ class Task(db.Model):
 
 # ========== FUNCIÓN PARA INICIALIZAR DB ==========
 def init_db():
+    """Inicializa la base de datos dentro del contexto de la aplicación"""
     try:
-        print("🔄 Creando tablas en la base de datos...")
-        db.create_all()
-        print("✅ Tablas creadas correctamente")
-        return True
+        with app.app_context():
+            print("🔄 Creando tablas en la base de datos...")
+            db.create_all()
+            print("✅ Tablas creadas correctamente")
+            
+            # Verificar que la tabla existe
+            from sqlalchemy import text
+            with db.engine.connect() as conn:
+                # Para PostgreSQL
+                result = conn.execute(text("SELECT tablename FROM pg_tables WHERE schemaname='public'"))
+                tables = [row[0] for row in result]
+                print(f"📋 Tablas existentes: {tables}")
+                
+                if 'tasks' not in tables:
+                    print("⚠️ La tabla 'tasks' no se creó automáticamente. Creando manualmente...")
+                    conn.execute(text("""
+                        CREATE TABLE IF NOT EXISTS tasks (
+                            id SERIAL PRIMARY KEY,
+                            title VARCHAR(100) NOT NULL,
+                            description VARCHAR(200),
+                            completed BOOLEAN DEFAULT FALSE,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )
+                    """))
+                    conn.commit()
+                    print("✅ Tabla 'tasks' creada manualmente")
+            
+            return True
     except Exception as e:
         print(f"❌ Error al inicializar base de datos: {e}")
         return False
+
+# ========== INICIALIZAR DB AL INICIAR ==========
+# Esto se ejecuta cuando la aplicación se carga
+with app.app_context():
+    print("🔧 Inicializando base de datos...")
+    db.create_all()
+    print("✅ Base de datos inicializada correctamente")
 
 # ========== RUTAS ==========
 @app.route('/')
 def home():
     """Sirve index.html desde la ubicación correcta"""
-    # Lista de posibles ubicaciones
-    posibles_ubicaciones = [
-        '/app/src/static/index.html',
-        '/app/static/index.html',
-        'src/static/index.html',
-        'static/index.html',
-        os.path.join(os.path.dirname(__file__), 'static', 'index.html'),
-        os.path.join(os.path.dirname(__file__), '..', 'static', 'index.html'),
-    ]
-    
-    print(f"=== BUSCANDO index.html ===")
-    for ubicacion in posibles_ubicaciones:
-        if os.path.exists(ubicacion):
-            print(f"✅ Encontrado en: {ubicacion}")
-            # Servir desde la carpeta correcta
-            if 'src/static' in ubicacion:
-                return send_from_directory('src/static', 'index.html')
-            elif 'static' in ubicacion:
-                return send_from_directory('static', 'index.html')
-            else:
-                # Fallback: servir desde el directorio donde está
-                directorio = os.path.dirname(ubicacion)
-                return send_from_directory(directorio, 'index.html')
-    
-    # Si no se encuentra, mostrar error detallado
-    print("❌ No se encontró index.html en ninguna ubicación")
-    print(f"Archivos en /app: {os.listdir('/app') if os.path.exists('/app') else 'No existe'}")
-    print(f"Archivos en /app/src: {os.listdir('/app/src') if os.path.exists('/app/src') else 'No existe'}")
-    
-    return jsonify({
-        'error': 'No se encuentra index.html',
-        'directorio_actual': os.getcwd(),
-        'archivos_en_app': os.listdir('/app') if os.path.exists('/app') else [],
-        'archivos_en_src': os.listdir('/app/src') if os.path.exists('/app/src') else [],
-    }), 404
+    try:
+        # Buscar en varias ubicaciones
+        if os.path.exists('src/static/index.html'):
+            return send_from_directory('src/static', 'index.html')
+        elif os.path.exists('static/index.html'):
+            return send_from_directory('static', 'index.html')
+        elif os.path.exists('/app/src/static/index.html'):
+            return send_from_directory('/app/src/static', 'index.html')
+        else:
+            # Si no se encuentra, mostrar error
+            return jsonify({
+                'error': 'No se encuentra index.html',
+                'directorio': os.getcwd(),
+                'archivos': os.listdir('.') if os.path.exists('.') else []
+            }), 404
+    except Exception as e:
+        print(f"Error en home: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/static/<path:path>')
 def serve_static(path):
@@ -180,9 +195,12 @@ def health():
     except Exception as e:
         return jsonify({'status': 'error', 'database': 'disconnected', 'error': str(e)}), 500
 
-# ========== INICIALIZAR ==========
-init_db()
-
+# ========== PARA DESARROLLO LOCAL ==========
 if __name__ == '__main__':
+    with app.app_context():
+        db.create_all()
     port = int(os.getenv('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
+
+# ========== PARA RENDER ==========
+# La aplicación ya se inicializa al cargar el módulo
