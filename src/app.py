@@ -1,205 +1,109 @@
-# src/app.py
-from flask import Flask, request, jsonify, send_from_directory
-from flask_sqlalchemy import SQLAlchemy
-from flask_cors import CORS
-from datetime import datetime
 import os
-import sys
+from flask import Flask, render_template, request, jsonify, send_from_directory
+from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import text
+from datetime import datetime
 
-print("=== INICIANDO APLICACIÓN ===")
-print(f"Python version: {sys.version}")
-print(f"Current directory: {os.getcwd()}")
+# --- CONFIGURACIÓN DE RUTAS PARA TU ESTRUCTURA DE CARPETAS ---
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-app = Flask(__name__)
-CORS(app)
+# Le decimos a Flask que la carpeta 'static' está en src/static
+# Y usamos esa misma carpeta como 'templates' porque tu index.html está ahí.
+app = Flask(__name__, 
+            static_folder=os.path.join(BASE_DIR, 'static'), 
+            template_folder=os.path.join(BASE_DIR, 'static'))
 
-# Configuración de base de datos
-database_url = os.getenv('DATABASE_URL')
-print(f"DATABASE_URL: {database_url[:50] if database_url else 'No definida'}...")
-
-if not database_url:
-    data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data')
-    os.makedirs(data_dir, exist_ok=True)
-    database_url = f'sqlite:///{os.path.join(data_dir, "tasks.db")}'
-    print(f"Usando SQLite: {database_url}")
-else:
-    if database_url.startswith('postgres://'):
-        database_url = database_url.replace('postgres://', 'postgresql://', 1)
-        print(f"URL convertida a: {database_url[:50]}...")
-    print("Usando PostgreSQL")
-
-app.config['SQLALCHEMY_DATABASE_URI'] = database_url
+# --- CONFIGURACIÓN DE LA BASE DE DATOS (PostgreSQL) ---
+# Usa la variable de entorno que ya tienes en Render
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///todo.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
-print("✅ SQLAlchemy inicializado correctamente")
 
-# ========== MODELO ==========
-class Task(db.Model):
-    __tablename__ = 'tasks'
+# --- DEFINICIÓN DEL MODELO (TABLA DE TAREAS) ---
+class Tarea(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(100), nullable=False)
-    description = db.Column(db.String(200))
-    completed = db.Column(db.Boolean, default=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    contenido = db.Column(db.String(200), nullable=False)
+    completada = db.Column(db.Boolean, default=False)
+    fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)
 
     def to_dict(self):
         return {
             'id': self.id,
-            'title': self.title,
-            'description': self.description,
-            'completed': self.completed,
-            'createdAt': self.created_at.isoformat() if self.created_at else None
+            'contenido': self.contenido,
+            'completada': self.completada,
+            'fecha_creacion': self.fecha_creacion.isoformat()
         }
 
-# ========== FUNCIÓN PARA INICIALIZAR DB ==========
-def init_db():
-    """Inicializa la base de datos dentro del contexto de la aplicación"""
-    try:
-        with app.app_context():
-            print("🔄 Creando tablas en la base de datos...")
-            db.create_all()
-            print("✅ Tablas creadas correctamente")
-            
-            # Verificar que la tabla existe
-            from sqlalchemy import text
-            with db.engine.connect() as conn:
-                # Para PostgreSQL
-                result = conn.execute(text("SELECT tablename FROM pg_tables WHERE schemaname='public'"))
-                tables = [row[0] for row in result]
-                print(f"📋 Tablas existentes: {tables}")
-                
-                if 'tasks' not in tables:
-                    print("⚠️ La tabla 'tasks' no se creó automáticamente. Creando manualmente...")
-                    conn.execute(text("""
-                        CREATE TABLE IF NOT EXISTS tasks (
-                            id SERIAL PRIMARY KEY,
-                            title VARCHAR(100) NOT NULL,
-                            description VARCHAR(200),
-                            completed BOOLEAN DEFAULT FALSE,
-                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                        )
-                    """))
-                    conn.commit()
-                    print("✅ Tabla 'tasks' creada manualmente")
-            
-            return True
-    except Exception as e:
-        print(f"❌ Error al inicializar base de datos: {e}")
-        return False
-
-# ========== INICIALIZAR DB AL INICIAR ==========
-# Esto se ejecuta cuando la aplicación se carga
-print("🔧 Inicializando base de datos...")
-init_db()
-
-# ========== RUTAS ==========
+# --- CORRECCIÓN DEL ERROR 404 (CARGAR EL FRONTEND) ---
 @app.route('/')
 def home():
-    """Sirve index.html desde la ubicación correcta"""
-    try:
-        # Buscar en varias ubicaciones
-        if os.path.exists('src/static/index.html'):
-            return send_from_directory('src/static', 'index.html')
-        elif os.path.exists('static/index.html'):
-            return send_from_directory('static', 'index.html')
-        elif os.path.exists('/app/src/static/index.html'):
-            return send_from_directory('/app/src/static', 'index.html')
-        else:
-            # Si no se encuentra, mostrar error
-            return jsonify({
-                'error': 'No se encuentra index.html',
-                'directorio': os.getcwd(),
-                'archivos': os.listdir('.') if os.path.exists('.') else []
-            }), 404
-    except Exception as e:
-        print(f"Error en home: {e}")
-        return jsonify({'error': str(e)}), 500
+    # Busca y carga el archivo index.html que está en src/static
+    return render_template('index.html')
 
-@app.route('/static/<path:path>')
-def serve_static(path):
-    """Sirve archivos estáticos"""
-    try:
-        if os.path.exists(f'src/static/{path}'):
-            return send_from_directory('src/static', path)
-        elif os.path.exists(f'static/{path}'):
-            return send_from_directory('static', path)
-        else:
-            return jsonify({'error': f'No se encuentra {path}'}), 404
-    except Exception as e:
-        print(f"Error en static: {e}")
-        return jsonify({'error': str(e)}), 500
+# Ruta para servir los archivos estáticos (CSS y JS)
+@app.route('/<path:filename>')
+def serve_static(filename):
+    return send_from_directory(app.static_folder, filename)
 
-# ========== ENDPOINTS API ==========
-@app.route('/api/tasks', methods=['GET'])
-def get_tasks():
-    try:
-        tasks = Task.query.all()
-        return jsonify([t.to_dict() for t in tasks])
-    except Exception as e:
-        print(f"Error en get_tasks: {e}")
-        return jsonify({'error': str(e)}), 500
+# --- RUTAS DE LA API (CRUD DE TAREAS) ---
 
-@app.route('/api/tasks', methods=['POST'])
-def create_task():
-    try:
-        data = request.get_json()
-        if not data or 'title' not in data:
-            return jsonify({'error': 'El campo "title" es obligatorio'}), 400
-        task = Task(title=data['title'], description=data.get('description', ''))
-        db.session.add(task)
-        db.session.commit()
-        return jsonify(task.to_dict()), 201
-    except Exception as e:
-        print(f"Error en create_task: {e}")
-        db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+# 1. Obtener todas las tareas
+@app.route('/api/tareas', methods=['GET'])
+def get_tareas():
+    tareas = Tarea.query.order_by(Tarea.id.asc()).all()
+    return jsonify([tarea.to_dict() for tarea in tareas])
 
-@app.route('/api/tasks/<int:id>', methods=['PUT'])
-def update_task(id):
-    try:
-        task = Task.query.get_or_404(id)
-        data = request.get_json()
-        if 'title' in data:
-            task.title = data['title']
-        if 'description' in data:
-            task.description = data['description']
-        if 'completed' in data:
-            task.completed = bool(data['completed'])
-        db.session.commit()
-        return jsonify(task.to_dict())
-    except Exception as e:
-        print(f"Error en update_task: {e}")
-        db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+# 2. Crear una nueva tarea
+@app.route('/api/tareas', methods=['POST'])
+def crear_tarea():
+    data = request.get_json()
+    if not data or 'contenido' not in data:
+        return jsonify({'error': 'El campo "contenido" es obligatorio'}), 400
+    
+    nueva_tarea = Tarea(contenido=data['contenido'])
+    db.session.add(nueva_tarea)
+    db.session.commit()
+    return jsonify(nueva_tarea.to_dict()), 201
 
-@app.route('/api/tasks/<int:id>', methods=['DELETE'])
-def delete_task(id):
-    try:
-        task = Task.query.get_or_404(id)
-        db.session.delete(task)
-        db.session.commit()
-        return jsonify({'message': 'Tarea eliminada correctamente'}), 200
-    except Exception as e:
-        print(f"Error en delete_task: {e}")
-        db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+# 3. Actualizar una tarea (marcar como completada o editar texto)
+@app.route('/api/tareas/<int:id>', methods=['PUT'])
+def actualizar_tarea(id):
+    tarea = Tarea.query.get_or_404(id)
+    data = request.get_json()
+    
+    if 'contenido' in data:
+        tarea.contenido = data['contenido']
+    if 'completada' in data:
+        tarea.completada = data['completada']
+        
+    db.session.commit()
+    return jsonify(tarea.to_dict())
 
-@app.route('/healthz')
-def health():
-    try:
-        db.session.execute('SELECT 1')
-        return jsonify({'status': 'ok', 'database': 'connected'})
-    except Exception as e:
-        return jsonify({'status': 'error', 'database': 'disconnected', 'error': str(e)}), 500
+# 4. Eliminar una tarea
+@app.route('/api/tareas/<int:id>', methods=['DELETE'])
+def eliminar_tarea(id):
+    tarea = Tarea.query.get_or_404(id)
+    db.session.delete(tarea)
+    db.session.commit()
+    return jsonify({'mensaje': 'Tarea eliminada correctamente'}), 200
 
-# ========== PARA DESARROLLO LOCAL ==========
+# --- RUTA DE SALUD (para verificar que no vuelva a salir el error 404 en logs) ---
+@app.route('/health')
+def health_check():
+    try:
+        db.session.execute(text('SELECT 1'))
+        return jsonify({"status": "ok", "database": "conectada", "app": "Funcionando"}), 200
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+# --- ARRANQUE DE LA APLICACIÓN ---
 if __name__ == '__main__':
+    # Render asigna automáticamente el puerto
+    port = int(os.environ.get('PORT', 5000))
+    
+    # Creamos las tablas si no existen (solo por si acaso no usaste migraciones)
     with app.app_context():
         db.create_all()
-    port = int(os.getenv('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=True)
-
-# ========== PARA RENDER ==========
-# La aplicación ya se inicializa al cargar el módulo
-# No es necesario hacer nada más
+        
+    app.run(host='0.0.0.0', port=port)
