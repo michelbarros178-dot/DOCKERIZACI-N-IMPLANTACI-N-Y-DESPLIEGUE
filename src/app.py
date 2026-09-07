@@ -32,10 +32,11 @@ app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
+print("✅ SQLAlchemy inicializado correctamente")
 
 # ========== MODELO ==========
 class Task(db.Model):
-    __tablename__ = 'tasks'  # ← NOMBRE EXPLÍCITO DE LA TABLA
+    __tablename__ = 'tasks'
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(100), nullable=False)
     description = db.Column(db.String(200))
@@ -51,36 +52,12 @@ class Task(db.Model):
             'createdAt': self.created_at.isoformat() if self.created_at else None
         }
 
-# ========== FUNCIÓN PARA INICIALIZAR BASE DE DATOS ==========
+# ========== FUNCIÓN PARA INICIALIZAR DB ==========
 def init_db():
-    """Inicializa la base de datos creando todas las tablas"""
     try:
         print("🔄 Creando tablas en la base de datos...")
         db.create_all()
         print("✅ Tablas creadas correctamente")
-        
-        # Verificar que la tabla existe
-        inspector = db.inspect(db.engine)
-        tables = inspector.get_table_names()
-        print(f"📋 Tablas existentes: {tables}")
-        
-        if 'tasks' not in tables:
-            print("⚠️ La tabla 'tasks' no se creó automáticamente. Creando manualmente...")
-            # Crear manualmente si es necesario
-            from sqlalchemy import text
-            with db.engine.connect() as conn:
-                conn.execute(text("""
-                    CREATE TABLE IF NOT EXISTS tasks (
-                        id SERIAL PRIMARY KEY,
-                        title VARCHAR(100) NOT NULL,
-                        description VARCHAR(200),
-                        completed BOOLEAN DEFAULT FALSE,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                """))
-                conn.commit()
-                print("✅ Tabla 'tasks' creada manualmente")
-        
         return True
     except Exception as e:
         print(f"❌ Error al inicializar base de datos: {e}")
@@ -89,19 +66,46 @@ def init_db():
 # ========== RUTAS ==========
 @app.route('/')
 def home():
-    try:
-        if os.path.exists('src/static/index.html'):
-            return send_from_directory('src/static', 'index.html')
-        elif os.path.exists('static/index.html'):
-            return send_from_directory('static', 'index.html')
-        else:
-            return jsonify({'error': 'No se encuentra index.html'}), 404
-    except Exception as e:
-        print(f"Error en home: {e}")
-        return jsonify({'error': str(e)}), 500
+    """Sirve index.html desde la ubicación correcta"""
+    # Lista de posibles ubicaciones
+    posibles_ubicaciones = [
+        '/app/src/static/index.html',
+        '/app/static/index.html',
+        'src/static/index.html',
+        'static/index.html',
+        os.path.join(os.path.dirname(__file__), 'static', 'index.html'),
+        os.path.join(os.path.dirname(__file__), '..', 'static', 'index.html'),
+    ]
+    
+    print(f"=== BUSCANDO index.html ===")
+    for ubicacion in posibles_ubicaciones:
+        if os.path.exists(ubicacion):
+            print(f"✅ Encontrado en: {ubicacion}")
+            # Servir desde la carpeta correcta
+            if 'src/static' in ubicacion:
+                return send_from_directory('src/static', 'index.html')
+            elif 'static' in ubicacion:
+                return send_from_directory('static', 'index.html')
+            else:
+                # Fallback: servir desde el directorio donde está
+                directorio = os.path.dirname(ubicacion)
+                return send_from_directory(directorio, 'index.html')
+    
+    # Si no se encuentra, mostrar error detallado
+    print("❌ No se encontró index.html en ninguna ubicación")
+    print(f"Archivos en /app: {os.listdir('/app') if os.path.exists('/app') else 'No existe'}")
+    print(f"Archivos en /app/src: {os.listdir('/app/src') if os.path.exists('/app/src') else 'No existe'}")
+    
+    return jsonify({
+        'error': 'No se encuentra index.html',
+        'directorio_actual': os.getcwd(),
+        'archivos_en_app': os.listdir('/app') if os.path.exists('/app') else [],
+        'archivos_en_src': os.listdir('/app/src') if os.path.exists('/app/src') else [],
+    }), 404
 
 @app.route('/static/<path:path>')
 def serve_static(path):
+    """Sirve archivos estáticos"""
     try:
         if os.path.exists(f'src/static/{path}'):
             return send_from_directory('src/static', path)
@@ -176,12 +180,9 @@ def health():
     except Exception as e:
         return jsonify({'status': 'error', 'database': 'disconnected', 'error': str(e)}), 500
 
-# ========== INICIALIZAR APLICACIÓN ==========
+# ========== INICIALIZAR ==========
+init_db()
+
 if __name__ == '__main__':
-    init_db()
     port = int(os.getenv('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
-
-# ========== PARA RENDER ==========
-# Inicializar base de datos al cargar la aplicación
-init_db()
