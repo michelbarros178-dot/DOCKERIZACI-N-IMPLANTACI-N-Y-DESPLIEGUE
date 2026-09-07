@@ -15,8 +15,11 @@ RUN mkdir -p /app/data
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Copiar el código fuente (incluyendo static dentro de src)
 COPY src/ ./src/
-COPY static/ ./static/
+
+# Nota: NO copies static/ por separado porque ya está dentro de src/
+
 COPY .env .env
 
 EXPOSE 5000
