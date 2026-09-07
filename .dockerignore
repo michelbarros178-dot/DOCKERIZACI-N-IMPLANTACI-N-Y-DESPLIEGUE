@@ -1,0 +1,10 @@
+venv/
+__pycache__/
+*.pyc
+.git/
+.env.local
+.vscode/
+.idea/
+README.md
+*.md
+# NO excluir data/ ni *.db

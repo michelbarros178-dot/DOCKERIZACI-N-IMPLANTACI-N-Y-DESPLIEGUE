@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📋 Gestor de Tareas</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <div class="header-content">
+                <h1>📋 Gestor de Tareas</h1>
+                <div class="header-stats">
+                    <span id="totalTasks">0</span> tareas |
+                    <span id="completedTasks">0</span> completadas |
+                    <span id="pendingTasks">0</span> pendientes
+                </div>
+            </div>
+        </header>
+
+        <!-- Formulario para crear tarea -->
+        <div class="task-form">
+            <h2>➕ Nueva Tarea</h2>
+            <form id="taskForm">
+                <div class="form-group">
+                    <input type="text" id="titleInput" placeholder="Título de la tarea" required>
+                    <input type="text" id="descriptionInput" placeholder="Descripción (opcional)">
+                    <button type="submit" class="btn-primary">
+                        <i class="material-icons">add</i> Agregar
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Filtros -->
+        <div class="filters">
+            <button class="filter-btn active" data-filter="all">📋 Todas</button>
+            <button class="filter-btn" data-filter="pending">⏳ Pendientes</button>
+            <button class="filter-btn" data-filter="completed">✅ Completadas</button>
+        </div>
+
+        <!-- Lista de tareas -->
+        <div id="taskList" class="task-list">
+            <!-- Las tareas se renderizan aquí con JavaScript -->
+            <div class="loading">Cargando tareas...</div>
+        </div>
+    </div>
+
+    <!-- Modal para editar tarea -->
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>✏️ Editar Tarea</h2>
+            <form id="editForm">
+                <input type="hidden" id="editId">
+                <div class="form-group">
+                    <input type="text" id="editTitle" placeholder="Título" required>
+                    <input type="text" id="editDescription" placeholder="Descripción">
+                    <div class="checkbox-group">
+                        <label>
+                            <input type="checkbox" id="editCompleted"> Completada
+                        </label>
+                    </div>
+                    <button type="submit" class="btn-primary">💾 Guardar cambios</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>

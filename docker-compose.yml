@@ -1,0 +1,29 @@
+services:
+  api:
+    build: .
+    container_name: todo-api-flask
+    restart: always
+    environment:
+      - PORT=5000
+      # NO definimos DATABASE_URL para que app.py use la ruta dinámica
+    ports:
+      - "5000:5000"
+    networks:
+      - todo-network
+    volumes:
+      - ./data:/app/data
+      - ./src:/app/src
+    command: python src/app.py
+
+  adminer:
+    image: adminer:latest
+    container_name: todo-adminer
+    restart: always
+    ports:
+      - "8080:8080"
+    networks:
+      - todo-network
+
+networks:
+  todo-network:
+    driver: bridge
