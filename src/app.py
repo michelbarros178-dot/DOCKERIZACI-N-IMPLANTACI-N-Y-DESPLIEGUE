@@ -4,24 +4,42 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from datetime import datetime
 import os
+import sys
+
+print("=== INICIANDO APLICACIÓN ===")
+print(f"Python version: {sys.version}")
+print(f"Current directory: {os.getcwd()}")
 
 app = Flask(__name__, static_folder='../static')
 CORS(app)
 
 # Configuración de base de datos
-# Render inyecta DATABASE_URL automáticamente si usas su PostgreSQL
-# Si no, usamos SQLite con Persistent Disk
 database_url = os.getenv('DATABASE_URL')
+
+print(f"DATABASE_URL: {database_url[:50]}..." if database_url else "DATABASE_URL no definida")
+
 if not database_url:
-    # Para desarrollo local o SQLite con Persistent Disk
+    # Desarrollo local con SQLite
     data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data')
     os.makedirs(data_dir, exist_ok=True)
     database_url = f'sqlite:///{os.path.join(data_dir, "tasks.db")}'
+    print(f"Usando SQLite: {database_url}")
+else:
+    # PostgreSQL - Render usa postgres:// pero SQLAlchemy espera postgresql://
+    if database_url.startswith('postgres://'):
+        database_url = database_url.replace('postgres://', 'postgresql://', 1)
+        print(f"URL convertida a: {database_url[:50]}...")
+    print("Usando PostgreSQL")
 
 app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-db = SQLAlchemy(app)
+try:
+    db = SQLAlchemy(app)
+    print("✅ SQLAlchemy inicializado correctamente")
+except Exception as e:
+    print(f"❌ Error al inicializar SQLAlchemy: {e}")
+    raise
 
 # ========== MODELO ==========
 class Task(db.Model):
@@ -40,17 +58,15 @@ class Task(db.Model):
             'createdAt': self.created_at.isoformat() if self.created_at else None
         }
 
-# ========== RUTA PRINCIPAL ==========
+# ========== RUTAS ==========
 @app.route('/')
 def home():
     return send_from_directory('../static', 'index.html')
 
-# ========== RUTAS ESTÁTICAS ==========
 @app.route('/static/<path:path>')
 def serve_static(path):
     return send_from_directory('../static', path)
 
-# ========== ENDPOINTS API ==========
 @app.route('/api/tasks', methods=['GET'])
 def get_tasks():
     tasks = Task.query.all()
@@ -91,12 +107,12 @@ def delete_task(id):
     db.session.commit()
     return jsonify({'message': 'Tarea eliminada correctamente'}), 200
 
-# ========== PARA DESARROLLO LOCAL ==========
+@app.route('/healthz')
+def health():
+    return jsonify({'status': 'ok'})
+
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
     port = int(os.getenv('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
-
-# ========== PARA RENDER ==========
-# Render buscará 'app' automáticamente
