@@ -90,10 +90,8 @@ def init_db():
 
 # ========== INICIALIZAR DB AL INICIAR ==========
 # Esto se ejecuta cuando la aplicación se carga
-with app.app_context():
-    print("🔧 Inicializando base de datos...")
-    db.create_all()
-    print("✅ Base de datos inicializada correctamente")
+print("🔧 Inicializando base de datos...")
+init_db()
 
 # ========== RUTAS ==========
 @app.route('/')
@@ -204,3 +202,4 @@ if __name__ == '__main__':
 
 # ========== PARA RENDER ==========
 # La aplicación ya se inicializa al cargar el módulo
+# No es necesario hacer nada más
