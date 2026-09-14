@@ -12,10 +12,14 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 app = Flask(__name__, 
             static_folder=os.path.join(BASE_DIR, 'static'), 
             template_folder=os.path.join(BASE_DIR, 'static'))
+            
+# --- CONFIGURACIÓN DE LA BASE DE DATOS (PostgreSQL / SQLite) ---
+# Apuntamos a la carpeta 'data' que está en la raíz del proyecto
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(BASE_DIR)
+db_path = os.path.join(ROOT_DIR, 'data', 'tasks.db')
 
-# --- CONFIGURACIÓN DE LA BASE DE DATOS (PostgreSQL) ---
-# Usa la variable de entorno que ya tienes en Render
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///todo.db')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', f'sqlite:///{db_path}')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
@@ -38,8 +42,10 @@ class Tarea(db.Model):
 # --- CORRECCIÓN DEL ERROR 404 (CARGAR EL FRONTEND) ---
 @app.route('/')
 def home():
-    # Busca y carga el archivo index.html que está en src/static
-    return render_template('index.html')
+    # Lee el nombre del nodo desde las variables de entorno (por defecto será Nodo A)
+    nombre_nodo = os.environ.get('NODO_NAME', 'Nodo A')
+    # Pasa la variable al render_template para que sea dinámica en el HTML
+    return render_template('index.html', nombre_nodo=nombre_nodo)
 
 # Ruta para servir los archivos estáticos (CSS y JS)
 @app.route('/<path:filename>')
@@ -88,7 +94,7 @@ def eliminar_tarea(id):
     db.session.commit()
     return jsonify({'mensaje': 'Tarea eliminada correctamente'}), 200
 
-# --- RUTA DE SALUD (para verificar que no vuelva a salir el error 404 en logs) ---
+# --- RUTA DE SALUD ---
 @app.route('/health')
 def health_check():
     try:
@@ -99,10 +105,8 @@ def health_check():
 
 # --- ARRANQUE DE LA APLICACIÓN ---
 if __name__ == '__main__':
-    # Render asigna automáticamente el puerto
     port = int(os.environ.get('PORT', 5000))
     
-    # Creamos las tablas si no existen (solo por si acaso no usaste migraciones)
     with app.app_context():
         db.create_all()
         
