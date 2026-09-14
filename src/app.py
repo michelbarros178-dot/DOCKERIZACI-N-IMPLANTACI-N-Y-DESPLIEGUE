@@ -6,15 +6,6 @@ from datetime import datetime
 
 # --- CONFIGURACIÓN DE RUTAS PARA TU ESTRUCTURA DE CARPETAS ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-# Le decimos a Flask que la carpeta 'static' está en src/static
-# Y usamos esa misma carpeta como 'templates' porque tu index.html está ahí.
-app = Flask(__name__, 
-            static_folder=os.path.join(BASE_DIR, 'static'), 
-            template_folder=os.path.join(BASE_DIR, 'static'))
-
-# --- CONFIGURACIÓN DE LA BASE DE DATOS (PostgreSQL / SQLite) ---
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(BASE_DIR)
 
 # Asegurar que la carpeta 'data' exista dentro del contenedor
@@ -23,6 +14,11 @@ os.makedirs(data_dir, exist_ok=True)
 
 db_path = os.path.join(data_dir, 'tasks.db')
 
+app = Flask(__name__, 
+            static_folder=os.path.join(BASE_DIR, 'static'), 
+            template_folder=os.path.join(BASE_DIR, 'static'))
+
+# --- CONFIGURACIÓN DE LA BASE DE DATOS (SQLite) ---
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', f'sqlite:///{db_path}')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
@@ -43,15 +39,13 @@ class Tarea(db.Model):
             'fecha_creacion': self.fecha_creacion.isoformat()
         }
 
-# --- CORRECCIÓN DEL ERROR 404 (CARGAR EL FRONTEND) ---
+# --- CARGAR EL FRONTEND ---
 @app.route('/')
 def home():
-    # Lee el nombre del nodo desde las variables de entorno (por defecto será Nodo A)
     nombre_nodo = os.environ.get('NODO_NAME', 'Nodo A')
-    # Pasa la variable al render_template para que sea dinámica en el HTML
     return render_template('index.html', nombre_nodo=nombre_nodo)
 
-# Ruta para servir los archivos estáticos (CSS y JS)
+# Ruta para servir archivos estáticos (CSS y JS)
 @app.route('/<path:filename>')
 def serve_static(filename):
     return send_from_directory(app.static_folder, filename)
@@ -76,7 +70,7 @@ def crear_tarea():
     db.session.commit()
     return jsonify(nueva_tarea.to_dict()), 201
 
-# 3. Actualizar una tarea (marcar como completada o editar texto)
+# 3. Actualizar una tarea
 @app.route('/api/tareas/<int:id>', methods=['PUT'])
 def actualizar_tarea(id):
     tarea = Tarea.query.get_or_404(id)
