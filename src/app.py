@@ -32,11 +32,16 @@ class Tarea(db.Model):
     fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)
 
     def to_dict(self):
+        fecha_str = self.fecha_creacion.isoformat() if self.fecha_creacion else datetime.utcnow().isoformat()
         return {
             'id': self.id,
             'contenido': self.contenido,
+            'title': self.contenido,         # Compatible si el JS busca 'title'
+            'text': self.contenido,          # Compatible si el JS busca 'text'
             'completada': self.completada,
-            'fecha_creacion': self.fecha_creacion.isoformat()
+            'completed': self.completada,    # Compatible si el JS busca 'completed'
+            'fecha_creacion': fecha_str,
+            'created_at': fecha_str          # Compatible si el JS busca 'created_at'
         }
 
 # --- CARGAR EL FRONTEND ---
@@ -45,47 +50,53 @@ def home():
     nombre_nodo = os.environ.get('NODO_NAME', 'Nodo A')
     return render_template('index.html', nombre_nodo=nombre_nodo)
 
-# Ruta para servir archivos estáticos (CSS y JS)
-@app.route('/<path:filename>')
-def serve_static(filename):
-    return send_from_directory(app.static_folder, filename)
-
 # --- RUTAS DE LA API (CRUD DE TAREAS) ---
 
 # 1. Obtener todas las tareas
-@app.route('/api/tareas', methods=['GET'])
+@app.route('/api/tasks', methods=['GET'])
 def get_tareas():
     tareas = Tarea.query.order_by(Tarea.id.asc()).all()
     return jsonify([tarea.to_dict() for tarea in tareas])
 
-# 2. Crear una nueva tarea
-@app.route('/api/tareas', methods=['POST'])
+# 2. Crear una nueva tarea (Soporta 'contenido' o 'title')
+@app.route('/api/tasks', methods=['POST'])
 def crear_tarea():
     data = request.get_json()
-    if not data or 'contenido' not in data:
-        return jsonify({'error': 'El campo "contenido" es obligatorio'}), 400
+    if not data:
+        return jsonify({'error': 'Datos no válidos'}), 400
     
-    nueva_tarea = Tarea(contenido=data['contenido'])
+    texto_tarea = data.get('contenido') or data.get('title') or data.get('text')
+    
+    if not texto_tarea:
+        return jsonify({'error': 'El campo de texto es obligatorio'}), 400
+    
+    nueva_tarea = Tarea(contenido=texto_tarea)
     db.session.add(nueva_tarea)
     db.session.commit()
     return jsonify(nueva_tarea.to_dict()), 201
 
-# 3. Actualizar una tarea
-@app.route('/api/tareas/<int:id>', methods=['PUT'])
+# 3. Actualizar una tarea (Soporta múltiples variaciones de campos)
+@app.route('/api/tasks/<int:id>', methods=['PUT'])
 def actualizar_tarea(id):
     tarea = Tarea.query.get_or_404(id)
     data = request.get_json()
     
-    if 'contenido' in data:
-        tarea.contenido = data['contenido']
-    if 'completada' in data:
-        tarea.completada = data['completada']
+    if not data:
+        return jsonify({'error': 'Datos no válidos'}), 400
+    
+    nuevo_contenido = data.get('contenido') or data.get('title') or data.get('text')
+    if nuevo_contenido is not None:
+        tarea.contenido = nuevo_contenido
+        
+    nueva_completada = data.get('completada') if 'completada' in data else data.get('completed')
+    if nueva_completada is not None:
+        tarea.completada = nueva_completada
         
     db.session.commit()
     return jsonify(tarea.to_dict())
 
 # 4. Eliminar una tarea
-@app.route('/api/tareas/<int:id>', methods=['DELETE'])
+@app.route('/api/tasks/<int:id>', methods=['DELETE'])
 def eliminar_tarea(id):
     tarea = Tarea.query.get_or_404(id)
     db.session.delete(tarea)
@@ -100,6 +111,11 @@ def health_check():
         return jsonify({"status": "ok", "database": "conectada", "app": "Funcionando"}), 200
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
+# --- RUTA COMODÍN PARA ARCHIVOS ESTÁTICOS ---
+@app.route('/<path:filename>')
+def serve_static(filename):
+    return send_from_directory(app.static_folder, filename)
 
 # --- ARRANQUE DE LA APLICACIÓN ---
 if __name__ == '__main__':
