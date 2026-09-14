@@ -12,12 +12,16 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 app = Flask(__name__, 
             static_folder=os.path.join(BASE_DIR, 'static'), 
             template_folder=os.path.join(BASE_DIR, 'static'))
-            
+
 # --- CONFIGURACIÓN DE LA BASE DE DATOS (PostgreSQL / SQLite) ---
-# Apuntamos a la carpeta 'data' que está en la raíz del proyecto
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(BASE_DIR)
-db_path = os.path.join(ROOT_DIR, 'data', 'tasks.db')
+
+# Asegurar que la carpeta 'data' exista dentro del contenedor
+data_dir = os.path.join(ROOT_DIR, 'data')
+os.makedirs(data_dir, exist_ok=True)
+
+db_path = os.path.join(data_dir, 'tasks.db')
 
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', f'sqlite:///{db_path}')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
